@@ -1,6 +1,7 @@
 .idea
 venv
 tmp
+__pycache__
 vendor
 # Binaries for programs and plugins
 *.exe
