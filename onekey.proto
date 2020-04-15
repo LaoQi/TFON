@@ -1,0 +1,27 @@
+syntax="proto3";
+
+enum HashMethod {
+  MD5 = 0;
+  SHA1 = 1;
+  SHA256 = 2;
+  SHA384 = 3;
+}
+
+
+message Header {
+  uint32 version = 1;
+
+}
+
+message Block {
+  uint32 version = 1;
+  uint64 timestamp = 2;
+  HashMethod method = 3;
+  bytes hash = 4;
+  string data = 5;
+};
+
+message OneKey {
+  Header header = 1;
+  repeated Block blocks = 2;
+}
