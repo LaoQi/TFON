@@ -1,6 +1,7 @@
 """
 
 """
+import io
 import time
 import hashlib
 from diff_match_patch import diff_match_patch
@@ -13,12 +14,16 @@ class PhraseNotSet(Exception):
     pass
 
 
+class DecryptFailed(Exception):
+    pass
+
+
 class Frank:
     def __init__(self):
         self._phrase = None
         self._blocks = []
         self.data = OneKey()
-        self.raw_data = self.data.SerializeToString()
+        self.raw_data = None
         self._patch = None
         self._full_content = ""
         self._is_changed = False
@@ -35,7 +40,7 @@ class Frank:
         self._full_content = content
         return content
 
-    def set_phrase(self, value):
+    def set_phrase(self, value: bytes):
         self._phrase = value
 
     def update_content(self, value: str):
@@ -45,7 +50,6 @@ class Frank:
         dmp = diff_match_patch()
         patches = dmp.patch_make(self.full_content, value)
         self._patch = dmp.patch_toText(patches)
-        print(self._patch)
         self._full_content = value
 
     def save(self):
@@ -84,28 +88,76 @@ class Frank:
     def length(self):
         return len(self.data.blocks)
 
+    @staticmethod
+    def padding(data: bytes):
+        # like pkcs7
+        reader = io.BytesIO()
+        reader.write(data)
+        p = 64 - len(data) % 64
+        reader.write(p.to_bytes(1, 'little') * p)
+        return reader.getvalue()
+
+    @staticmethod
+    def remove_padding(data: bytes):
+        # like pkcs7
+        p = data[-1]
+        if p == 0 and sum(data[-64:]) == 0:
+            return data[:-64]
+        elif sum(data[0 - p:]) == p*p:
+            return data[: 0 - p]
+        return data
+
+    @staticmethod
+    def luna(phrase, data: bytes):
+        keyring = hashlib.sha512(phrase)
+        reader = io.BytesIO()
+        reader.write(data)
+        writer = io.BytesIO()
+        reader.seek(0, 0)
+        temp = reader.read(64)
+        while temp:
+            key = keyring.digest()
+            for i in range(64):
+                b = temp[i] ^ key[i]
+                writer.write(b.to_bytes(1, 'little'))
+            keyring.update(key)
+            temp = reader.read(64)
+        return writer.getvalue()
+
     def encrypt(self):
         if not self._phrase:
             return
-        self.raw_data = self.data.SerializeToString()
+        data = self.data.SerializeToString()
+        self.raw_data = self.luna(self._phrase, self.padding(data))
 
     def decrypt(self):
         if not self._phrase or not self.raw_data:
             return
-        self.data.ParseFromString(self.raw_data)
+        try:
+            data = self.luna(self._phrase, self.raw_data)
+            self.data.ParseFromString(self.remove_padding(data))
+        except Exception:
+            raise DecryptFailed()
 
 
 if __name__ == "__main__":
     import os
 
     frank = Frank()
-    frank.set_phrase("phrase")
+    frank.set_phrase("phrase".encode())
+    # t = frank.padding(b'This is test content!This is test content!This is test content!')
+    # print(t)
+    # test = frank.luna("phrase1", t)
+    # print(len(test), test.hex())
+    # back = frank.luna("phrase1", test)
+    # print(back)
+    # print(frank.remove_padding(back))
     if os.path.exists('tmp/save'):
         with open('tmp/save', 'rb') as f:
             frank.load(f.read())
-    frank.update_content("test 3\n this is \n new line")
+    frank.update_content("test 5\n this is \r\n unknown ")
     frank.save()
     print(frank.length())
-    with open('tmp/save', 'wb') as f:
-        f.write(frank.dumps())
+    # with open('tmp/save', 'wb') as f:
+    #     f.write(frank.dumps())
     print(frank.full_content)
