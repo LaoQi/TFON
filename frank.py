@@ -9,6 +9,13 @@ from onekey_pb2 import MD5, SHA1, SHA256, SHA384, OneKey
 
 DEFAULT_HASH_METHOD = MD5
 
+_keyring_padding = "This is your last chance. " \
+                   "After this, there is no turning back. " \
+                   "You take the blue pill – " \
+                   "the story ends, you wake up in your bed and believe whatever you want to believe. " \
+                   "You take the red pill – " \
+                   "you stay in Wonderland and I show you how deep the rabbit-hole goes.".encode()
+
 
 class PhraseNotSet(Exception):
     pass
@@ -110,6 +117,7 @@ class Frank:
     @staticmethod
     def luna(phrase, data: bytes):
         keyring = hashlib.sha512(phrase)
+        keyring.update(_keyring_padding)
         reader = io.BytesIO()
         reader.write(data)
         writer = io.BytesIO()
@@ -155,9 +163,9 @@ if __name__ == "__main__":
     if os.path.exists('tmp/save'):
         with open('tmp/save', 'rb') as f:
             frank.load(f.read())
-    frank.update_content("test 5\n this is \r\n unknown ")
+    frank.update_content("blue pill")
     frank.save()
     print(frank.length())
-    # with open('tmp/save', 'wb') as f:
-    #     f.write(frank.dumps())
+    with open('tmp/save', 'wb') as f:
+        f.write(frank.dumps())
     print(frank.full_content)
